@@ -1,0 +1,6 @@
+a0-a7, a2.
+nowhere, compiler optimization by inline function.
+0x0000000000000630
+0x38
+He110 World, 0x726c6400, no change for 57616.
+print the value of a2 register.
