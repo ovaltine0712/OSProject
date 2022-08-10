@@ -1,7 +1,7 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
-
+//lab1
 //0 - read 1 - write
 int main(int argc, char *argv[])
 {
