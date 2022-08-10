@@ -185,6 +185,7 @@ pte_t*          walk(pagetable_t, uint64, int);//NEW
 void            proc_freewalk(pagetable_t);//NEW
 void            u2kvmcopy(pagetable_t, pagetable_t, uint64, uint64);//NEW
 
+
 //vmcopyin.c
 int            copyin_new(pagetable_t, char *, uint64, uint64);
 int            copyinstr_new(pagetable_t, char *, uint64, uint64);
