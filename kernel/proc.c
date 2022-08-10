@@ -34,14 +34,14 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      // char *pa = kalloc();
+      // if(pa == 0)
+      //   panic("kalloc");
+      // uint64 va = KSTACK((int) (p - proc));
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
   }
-  kvminithart();
+  //kvminithart();
 }
 
 // Must be called with interrupts disabled,
@@ -121,6 +121,21 @@ found:
     return 0;
   }
 
+  //NEW
+  // An empty kernel page table
+  p->kpagetable=ukvminit();
+  if(p->kpagetable==0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  //初始化内核栈
+  char *pa = kalloc();
+  if(pa == 0)
+    panic("kalloc");
+  uint64 va = KSTACK((int) (p - proc));
+  kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -139,6 +154,23 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+  //NEW
+  //释放内核栈内存
+  if(p->kstack) {
+    pte_t* pte = walk(p->kpagetable, p->kstack, 0);
+	if(pte == 0)
+      panic("freeproc: walk");
+	kfree((void*)PTE2PA(*pte));
+  }
+  p->kstack = 0;
+  //释放内核页表
+  if(p->kpagetable) {
+    proc_freewalk(p->kpagetable);
+  }
+  p->kpagetable = 0;
+
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -229,7 +261,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
+  u2kvmcopy(p->pagetable,p->kpagetable,0,p->sz);//NEW
   release(&p->lock);
 }
 
@@ -249,6 +281,8 @@ growproc(int n)
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+  if(PGROUNDUP(sz + n) >= PLIC) 
+    return -1;//NEW
   p->sz = sz;
   return 0;
 }
@@ -288,6 +322,9 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+ // 添加代码
+  u2kvmcopy(np->pagetable, np->kpagetable, 0, np->sz);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
@@ -473,7 +510,17 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        //swtch(&c->context, &p->context);
+
+        // change satp
+        w_satp(MAKE_SATP(p->kpagetable));
+        sfence_vma();
+
+        // change process
         swtch(&c->context, &p->context);
+
+        // change back
+        kvminithart();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
